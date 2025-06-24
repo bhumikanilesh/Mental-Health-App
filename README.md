@@ -1,4 +1,4 @@
-"Mood Tracker"
+#**Mood Tracker**
 A Flask web app for tracking emotions with sentiment analysis, user authentication, and personalized reports.
 Features
 
