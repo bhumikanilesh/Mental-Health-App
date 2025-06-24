@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mood Tracker | Daily Emotional Wellness</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <h1>🌿 Daily Mood Tracker</h1>
+        <p class="subtitle">Track your emotions 3 times daily for better mental wellness</p>
+        
+        <div id="entry-forms">
+            <!-- Entry forms will be shown one at a time -->
+        </div>
+        
+        <div id="report-section" class="hidden">
+            <h2>Your Daily Wellness Report</h2>
+            <div id="report" class="report"></div>
+            <button onclick="resetEntries()">Start New Day</button>
+        </div>
+    </div>
+
+    <script>
+        // Initialize with three empty entries
+        const entryTimes = ["Morning", "Afternoon", "Evening"];
+        const entryForms = document.getElementById('entry-forms');
+        
+        // Create entry forms dynamically
+        entryTimes.forEach((time, index) => {
+            const entryNum = index + 1;
+            entryForms.innerHTML += `
+                <div class="entry-form ${entryNum > 1 ? 'hidden' : ''}" id="entry${entryNum}">
+                    <h3>Entry ${entryNum} (${time})</h3>
+                    <p>How are you feeling right now?</p>
+                    <textarea id="text${entryNum}" placeholder="Example: I'm feeling excited about my project today..."></textarea>
+                    <button onclick="analyzeFeeling(${entryNum})">Submit & Continue</button>
+                    <div id="result${entryNum}" class="result hidden"></div>
+                </div>
+            `;
+        });
+
+        let entriesSubmitted = 0;
+        const entryData = [];
+        
+        function analyzeFeeling(entryNum) {
+            const text = document.getElementById(`text${entryNum}`).value.trim();
+            if (!text) {
+                alert("Please share how you're feeling before submitting");
+                return;
+            }
+            
+            fetch('/analyze', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ feeling: text }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Store the entry data
+                entryData.push({
+                    text: text,
+                    sentiment: data.sentiment,
+                    suggestion: data.suggestion,
+                    is_critical: data.is_critical
+                });
+                
+                // Show result
+                const resultDiv = document.getElementById(`result${entryNum}`);
+                resultDiv.classList.remove('hidden', 'positive', 'negative', 'neutral', 'critical');
+                resultDiv.classList.add(data.sentiment.toLowerCase());
+                
+                if (data.is_critical) {
+                    resultDiv.classList.add('critical');
+                    resultDiv.innerHTML = `
+                        <strong>${data.sentiment} Mood Detected</strong><br>
+                        ${data.suggestion}<br>
+                        <strong style="color:var(--danger);">We detected concerning words in your message. 
+                        Please consider reaching out to a mental health professional or call a helpline.</strong>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <strong>${data.sentiment} Mood</strong><br>
+                        ${data.suggestion}
+                    `;
+                }
+                
+                // Show next entry or generate report
+                entriesSubmitted++;
+                if (entriesSubmitted < 3) {
+                    document.getElementById(`entry${entryNum}`).classList.add('hidden');
+                    document.getElementById(`entry${entryNum+1}`).classList.remove('hidden');
+                } else {
+                    generateReport();
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert("Error analyzing your feeling. Please try again.");
+            });
+        }
+        
+        function generateReport() {
+            document.getElementById('entry-forms').classList.add('hidden');
+            document.getElementById('report-section').classList.remove('hidden');
+            
+            // Count sentiment occurrences
+            const sentimentCount = {
+                POSITIVE: 0,
+                NEGATIVE: 0,
+                NEUTRAL: 0
+            };
+            
+            entryData.forEach(entry => {
+                sentimentCount[entry.sentiment]++;
+            });
+            
+            // Calculate percentages
+            const total = entryData.length;
+            const positivePct = Math.round((sentimentCount.POSITIVE / total) * 100);
+            const negativePct = Math.round((sentimentCount.NEGATIVE / total) * 100);
+            const neutralPct = Math.round((sentimentCount.NEUTRAL / total) * 100);
+            
+            // Generate report HTML
+            let reportHTML = `
+                <h3>Today's Mood Summary</h3>
+                
+                <div class="progress-container">
+                    <div class="progress-bar" style="width: ${positivePct}%">${positivePct}% Positive</div>
+                </div>
+                <div class="progress-container">
+                    <div class="progress-bar" style="width: ${neutralPct}%; background: var(--warning);">${neutralPct}% Neutral</div>
+                </div>
+                <div class="progress-container">
+                    <div class="progress-bar" style="width: ${negativePct}%; background: var(--danger);">${negativePct}% Negative</div>
+                </div>
+                
+                <h3>Personalized Recommendations</h3>
+                <ul>
+            `;
+            
+            // Add recommendations based on mood patterns
+            if (sentimentCount.NEGATIVE >= 2) {
+                reportHTML += `
+                    <li>💙 You had multiple challenging moments today. Consider speaking with a therapist or counselor.</li>
+                    <li>🏃‍♂️ Physical exercise can help - even a 10-minute walk can boost your mood.</li>
+                    <li>📞 Reach out to a friend or family member to talk about how you're feeling.</li>
+                `;
+            } else if (sentimentCount.POSITIVE >= 2) {
+                reportHTML += `
+                    <li>🌟 Great job maintaining a positive outlook! Keep doing what makes you happy.</li>
+                    <li>📝 Consider journaling about what contributed to your positive moods today.</li>
+                `;
+            } else {
+                reportHTML += `
+                    <li>📊 Your mood was mixed today. Try identifying patterns in what affects your mood.</li>
+                    <li>🧘‍♀️ Mindfulness exercises might help balance your emotional state.</li>
+                `;
+            }
+            
+            reportHTML += `</ul>`;
+            
+            document.getElementById('report').innerHTML = reportHTML;
+        }
+        
+        function resetEntries() {
+            entriesSubmitted = 0;
+            entryData.length = 0;
+            
+            // Reset all forms
+            document.getElementById('entry-forms').classList.remove('hidden');
+            document.getElementById('report-section').classList.add('hidden');
+            
+            for (let i = 1; i <= 3; i++) {
+                document.getElementById(`text${i}`).value = '';
+                document.getElementById(`result${i}`).classList.add('hidden');
+                document.getElementById(`entry${i}`).classList.add('hidden');
+            }
+            
+            // Show first entry
+            document.getElementById('entry1').classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
